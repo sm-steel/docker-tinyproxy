@@ -1,0 +1,49 @@
+name: Release
+
+# Fires on a pushed vX.Y.Z tag. Builds and pushes ghcr.io/<owner>/<repo>:X.Y.Z
+# (tag with the leading "v" stripped), using X.Y.Z as tinyproxy's own git
+# tag to build from — this repo's version numbering deliberately tracks
+# upstream tinyproxy's, not its own independent scheme.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# Third-party actions are pinned to commit SHAs, not tags — a floating tag
+# can be repointed by whoever controls the action's repo. There is no
+# Dependabot here by choice, so pins are refreshed BY HAND. To bump one,
+# resolve the tag and keep the trailing comment truthful:
+#
+#   gh api repos/<owner>/<repo>/git/ref/tags/vX.Y.Z --jq '.object'
+#
+# (If that returns `"type": "tag"` instead of `"commit"`, dereference it via
+# repos/<owner>/<repo>/git/tags/<sha> to get the actual commit SHA.) Read the
+# release notes between the pinned version and the new one before bumping.
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Derive tinyproxy version from the pushed tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            GIT_TAG=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/docker-tinyproxy:${{ steps.version.outputs.version }}
