@@ -1,6 +1,6 @@
 FROM debian:bookworm-slim AS build-stage
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get --yes upgrade && \
     apt-get --yes install git build-essential automake && \
