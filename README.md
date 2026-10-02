@@ -42,6 +42,11 @@ Image tags track tinyproxy's own upstream version numbers exactly
 (`ghcr.io/<owner>/docker-tinyproxy:1.11.2` builds tinyproxy's own `1.11.2`
 tag) — pushing a `vX.Y.Z` git tag here builds and publishes that version.
 
+A change to this repo alone (e.g. `proxycheck`) on the same tinyproxy
+version gets a revision suffix: `v1.11.2-1`, then `v1.11.2-2`, … build
+tinyproxy `1.11.2` and publish `docker-tinyproxy:1.11.2-1` and so on. A new
+tinyproxy version starts again without one.
+
 ## Building locally
 
 ```sh
