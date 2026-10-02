@@ -10,9 +10,12 @@ beyond what the container runtime itself provides.
 
 The image also includes `proxycheck`, a small statically-linked helper
 built alongside tinyproxy in the same builder stage, used as the image's
-`HEALTHCHECK`. It makes one real authenticated HTTP request through the
-running tinyproxy instance and checks for a successful response — not just
-"is the port open." See `proxycheck.c` for exactly what it does. It reads
+`HEALTHCHECK`. It makes one real authenticated HTTP request to the running
+tinyproxy instance and checks for a successful response — not just "is the
+port open." The request is for tinyproxy's built-in stat host
+(`tinyproxy.stats`), which tinyproxy answers itself, so the check never
+depends on the outside network. Don't override `StatHost` in your
+`tinyproxy.conf`. See `proxycheck.c` for exactly what it does. It reads
 its credential from the `HEALTHCHECK_AUTH` environment variable
 (`user:password`) — set that to whatever BasicAuth user in your
 `tinyproxy.conf` you want the healthcheck to authenticate as.
@@ -38,6 +41,11 @@ services:
 Image tags track tinyproxy's own upstream version numbers exactly
 (`ghcr.io/<owner>/docker-tinyproxy:1.11.2` builds tinyproxy's own `1.11.2`
 tag) — pushing a `vX.Y.Z` git tag here builds and publishes that version.
+
+A change to this repo alone (e.g. `proxycheck`) on the same tinyproxy
+version gets a revision suffix: `v1.11.2-1`, then `v1.11.2-2`, … build
+tinyproxy `1.11.2` and publish `docker-tinyproxy:1.11.2-1` and so on. A new
+tinyproxy version starts again without one.
 
 ## Building locally
 

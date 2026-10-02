@@ -1,10 +1,19 @@
 /* proxycheck.c
  *
  * Minimal Docker HEALTHCHECK helper for this image. Makes one real,
- * authenticated HTTP request through the local tinyproxy instance to a
- * stable external target and checks for a genuine 200 response — not just
- * "the port is open." No shell, no other tools: this plus tinyproxy are the
- * only two binaries in the final image.
+ * authenticated HTTP request to the local tinyproxy instance and checks for
+ * a genuine 200 response — not just "the port is open." No shell, no other
+ * tools: this plus tinyproxy are the only two binaries in the final image.
+ *
+ * The request is for tinyproxy's own stat host (its compiled-in default,
+ * "tinyproxy.stats"), which tinyproxy answers itself, after checking
+ * Proxy-Authorization, without any DNS lookup or upstream connection. So it
+ * exercises accept, request parsing and BasicAuth, and nothing outside the
+ * container. An external target made the check fail whenever the host's
+ * route to that target did: example.com's Cloudflare addresses are partly
+ * blackholed from moscow, so tinyproxy's connect hung past our timeout and
+ * autoheal kept restarting a proxy that was fine, which can't fix a network
+ * path anyway. End-to-end reachability is the deploy probe's job.
  *
  * Reads the healthcheck-only credential from HEALTHCHECK_AUTH
  * ("user:password"), supplied via the container's environment by whatever
@@ -29,7 +38,7 @@
 
 #define PROXY_HOST "127.0.0.1"
 #define PROXY_PORT 8888
-#define TARGET_HOST "example.com"
+#define TARGET_HOST "tinyproxy.stats"
 #define IO_TIMEOUT_SEC 5
 #define MAX_AUTH_LEN 300
 
@@ -111,21 +120,41 @@ int main(void) {
         return fail("write() failed");
     }
 
+    /* Keep the first bytes for the status line, but read the whole response
+     * to EOF (Connection: close): hanging up mid-response makes tinyproxy log
+     * a write error ("Broken pipe") on every single check. */
     char resp[512];
-    ssize_t n = read(fd, resp, sizeof(resp) - 1);
+    size_t got = 0;
+    for (;;) {
+        char scratch[1024];
+        char *dst = got < sizeof(resp) - 1 ? resp + got : scratch;
+        size_t room = got < sizeof(resp) - 1 ? sizeof(resp) - 1 - got
+                                             : sizeof(scratch);
+        ssize_t n = read(fd, dst, room);
+        if (n < 0) {
+            close(fd);
+            return fail("read() failed or timed out");
+        }
+        if (n == 0) {
+            break;
+        }
+        if (dst == resp + got) {
+            got += (size_t)n;
+        }
+    }
     close(fd);
 
-    if (n <= 0) {
-        return fail("read() failed or connection closed early");
+    if (got == 0) {
+        return fail("connection closed before any response");
     }
-    resp[n] = '\0';
+    resp[got] = '\0';
 
     /* Status line looks like "HTTP/1.1 200 OK\r\n..." — check the start of
      * the response specifically, not just "200" anywhere in it, so a 200
      * appearing incidentally in a header/body can't produce a false pass. */
     if (strncmp(resp, "HTTP/1.1 200", 12) != 0 &&
         strncmp(resp, "HTTP/1.0 200", 12) != 0) {
-        return fail("non-200 response from proxied request");
+        return fail("non-200 response from tinyproxy");
     }
 
     return 0;

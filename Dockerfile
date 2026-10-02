@@ -45,10 +45,11 @@ COPY --from=build-stage --chown=0 /home/builder/proxycheck /
 USER ${USER_ID}
 
 # Exec form (no shell involved) — matches the rest of this image, which has
-# none. See proxycheck.c for what this actually checks: a real proxied
-# HTTP request through the running tinyproxy, not just "is the port open."
-# --retries smooths over a single transient upstream blip rather than
-# flipping to unhealthy on the first one.
+# none. See proxycheck.c for what this actually checks: a real authenticated
+# HTTP request that the running tinyproxy answers itself (its stat host), not
+# just "is the port open," and nothing outside the container. --retries
+# smooths over a single transient blip rather than flipping to unhealthy on
+# the first one.
 HEALTHCHECK --interval=30s --timeout=10s --retries=5 CMD ["/proxycheck"]
 
 CMD ["/tinyproxy", "-d", "-c", "/tinyproxy.conf"]

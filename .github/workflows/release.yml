@@ -1,9 +1,11 @@
 name: Release
 
-# Fires on a pushed vX.Y.Z tag. Builds and pushes ghcr.io/<owner>/<repo>:X.Y.Z
-# (tag with the leading "v" stripped), using X.Y.Z as tinyproxy's own git
-# tag to build from — this repo's version numbering deliberately tracks
-# upstream tinyproxy's, not its own independent scheme.
+# Fires on a pushed vX.Y.Z or vX.Y.Z-N tag. Builds and pushes
+# ghcr.io/<owner>/<repo>:X.Y.Z[-N] (tag with the leading "v" stripped), using
+# X.Y.Z as tinyproxy's own git tag to build from — this repo's version
+# numbering deliberately tracks upstream tinyproxy's, not its own independent
+# scheme. The optional -N suffix is an image-only revision (a fix to this
+# repo, e.g. proxycheck, on the same tinyproxy version).
 on:
   push:
     tags:
@@ -28,9 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Derive tinyproxy version from the pushed tag
+      - name: Derive image and tinyproxy versions from the pushed tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          image="${GITHUB_REF_NAME#v}"
+          if ! [[ "$image" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+            echo "::error::tag must be vX.Y.Z or vX.Y.Z-N, got $GITHUB_REF_NAME"
+            exit 1
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "tinyproxy=${image%%-*}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -44,6 +53,6 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            GIT_TAG=${{ steps.version.outputs.version }}
+            GIT_TAG=${{ steps.version.outputs.tinyproxy }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/docker-tinyproxy:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/docker-tinyproxy:${{ steps.version.outputs.image }}
