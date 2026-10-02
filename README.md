@@ -10,9 +10,12 @@ beyond what the container runtime itself provides.
 
 The image also includes `proxycheck`, a small statically-linked helper
 built alongside tinyproxy in the same builder stage, used as the image's
-`HEALTHCHECK`. It makes one real authenticated HTTP request through the
-running tinyproxy instance and checks for a successful response — not just
-"is the port open." See `proxycheck.c` for exactly what it does. It reads
+`HEALTHCHECK`. It makes one real authenticated HTTP request to the running
+tinyproxy instance and checks for a successful response — not just "is the
+port open." The request is for tinyproxy's built-in stat host
+(`tinyproxy.stats`), which tinyproxy answers itself, so the check never
+depends on the outside network. Don't override `StatHost` in your
+`tinyproxy.conf`. See `proxycheck.c` for exactly what it does. It reads
 its credential from the `HEALTHCHECK_AUTH` environment variable
 (`user:password`) — set that to whatever BasicAuth user in your
 `tinyproxy.conf` you want the healthcheck to authenticate as.
